@@ -1,6 +1,22 @@
 # Eval Maria Lucene – Full-Text Search Performance Comparison
 
-A Spring Boot application demonstrating a **migration strategy from Lucene (Hibernate Search) to native MariaDB full-text search**. This project includes a performance benchmark UI that compares Lucene, MariaDB MATCH..AGAINST, and MariaDB JSON_SEARCH approaches on real estate property data.
+## ✋ Preamble
+To make a good evaluation, more time is required but also more important: more information.
+Questions that arise during the implementation of the PoC and the evaluation of the results:
+
+- What are the exact search requirements? (e.g. relevance scoring, fuzzy search, wildcard support)
+- What is the expected data volume and growth rate?
+- What are the performance requirements (e.g. max response time, throughput)?
+- What are the operational complexity willing to accept
+- What is the current and future infrastructure (e.g. single server, cluster, cloud provider)?
+- What are the team’s expertise and familiarity with Lucene vs. MariaDB features?
+- What are the business priorities (e.g. time to market, cost reduction, feature richness)?
+- What are the fallback and rollback strategies in case of issues during migration?
+- ...
+
+Without these information, the PoC can only provide a limited evaluation. The more context and requirements are clarified, the better the PoC can be tailored to provide actionable insights.
+
+**TL;DR:** With the information I have, I would stay with lucene. If you want to store data as JSON maybe it better you use AWS OpenSearch Service (Elasticsearch) instead of MariaDB.
 
 ## 🎯 Project Overview
 
