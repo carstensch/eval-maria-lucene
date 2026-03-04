@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: eval-maria-spring
+  datasource:
+    url: jdbc:mariadb://localhost:3306/mydatabase
+    username: myuser
+    password: secret
+    driver-class-name: org.mariadb.jdbc.Driver
+  jpa:
+    properties:
+      hibernate:
+        search:
+          backend:
+            type: lucene
+            directory:
+              root: target/.lucene-index
+          schema_management:
+            strategy: create-or-validate
+          indexing:
+            listeners:
+              enabled: true

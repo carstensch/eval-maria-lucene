@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>MariaDB vs Lucene – Performance Comparison</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            padding: 2rem;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: .5rem;
+        }
+
+        p.subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        button {
+            padding: .75rem 2rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 8px;
+            background: #4f46e5;
+            color: #fff;
+            cursor: pointer;
+            transition: background .2s;
+        }
+
+        button:hover {
+            background: #4338ca;
+        }
+
+        button:disabled {
+            background: #a5b4fc;
+            cursor: wait;
+        }
+
+        .status {
+            text-align: center;
+            margin: 1rem 0;
+            font-style: italic;
+            color: #666;
+        }
+
+        .chart-container {
+            max-width: 1000px;
+            margin: 0 auto 3rem;
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
+        }
+
+        table {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+            border-collapse: collapse;
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
+        }
+
+        th, td {
+            padding: .75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #4f46e5;
+            color: #fff;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: #f0f0ff;
+        }
+
+        .hit-count {
+            color: #888;
+            font-size: .85rem;
+        }
+    </style>
+</head>
+<body>
+
+<h1>🔍 MariaDB vs Lucene – Search Performance</h1>
+<p class="subtitle">PoC benchmark comparing Hibernate Search (Lucene) with MariaDB native fulltext &amp; JSON search</p>
+
+<div class="controls">
+    <button id="runBtn" onclick="runBenchmark()">▶ Run Benchmark</button>
+</div>
+<div class="status" id="status"></div>
+
+<div class="chart-container">
+    <canvas id="barChart"></canvas>
+</div>
+
+<table id="resultsTable" style="display:none;">
+    <thead>
+    <tr>
+        <th>Scenario</th>
+        <th>Engine</th>
+        <th>Avg Duration (ms)</th>
+        <th>Total Hits</th>
+        <th>Runs</th>
+    </tr>
+    </thead>
+    <tbody id="resultsBody"></tbody>
+</table>
+
+<script>
+    let chart = null;
+
+    // Color palette per engine (consistent across scenarios)
+    const ENGINE_COLORS = {
+        'Lucene (Hibernate Search)': {bg: 'rgba(99, 102, 241, 0.7)', border: '#4f46e5'},
+        'MariaDB MATCH..AGAINST': {bg: 'rgba(16, 185, 129, 0.7)', border: '#059669'},
+        'MariaDB JSON_SEARCH': {bg: 'rgba(245, 158, 11, 0.7)', border: '#d97706'},
+        'MariaDB generated column': {bg: 'rgba(16, 185, 129, 0.7)', border: '#059669'},
+        'MariaDB MATCH..AGAINST + ORDER BY': {bg: 'rgba(16, 185, 129, 0.7)', border: '#059669'},
+        'MariaDB MATCH..AGAINST + WHERE + ORDER BY': {bg: 'rgba(16, 185, 129, 0.7)', border: '#059669'},
+    };
+
+    function getColor(engine) {
+        return ENGINE_COLORS[engine] || {bg: 'rgba(156, 163, 175, 0.7)', border: '#6b7280'};
+    }
+
+    async function runBenchmark() {
+        const btn = document.getElementById('runBtn');
+        const status = document.getElementById('status');
+        btn.disabled = true;
+        btn.textContent = '⏳ Running…';
+        status.textContent = 'Executing benchmark (this may take a minute with warm-up runs)…';
+
+        try {
+            const res = await fetch('/api/performance/check', {method: 'POST'});
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            status.textContent = 'Benchmark complete!';
+            renderChart(data);
+            renderTable(data);
+        } catch (e) {
+            status.textContent = '❌ Error: ' + e.message;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '▶ Run Benchmark';
+        }
+    }
+
+    function renderChart(data) {
+        // Group by scenario
+        const scenarios = [...new Set(data.map(d => d.scenario))];
+        const engines = [...new Set(data.map(d => d.engine))];
+
+        const datasets = engines.map(engine => {
+            const color = getColor(engine);
+            return {
+                label: engine,
+                data: scenarios.map(sc => {
+                    const item = data.find(d => d.scenario === sc && d.engine === engine);
+                    return item ? item.durationMs : 0;
+                }),
+                backgroundColor: color.bg,
+                borderColor: color.border,
+                borderWidth: 1,
+            };
+        });
+
+        if (chart) chart.destroy();
+
+        chart = new Chart(document.getElementById('barChart'), {
+            type: 'bar',
+            data: {labels: scenarios, datasets},
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {display: true, text: 'Average Query Duration (ms) – lower is better', font: {size: 16}},
+                    legend: {position: 'bottom'},
+                },
+                scales: {
+                    y: {beginAtZero: true, title: {display: true, text: 'ms (avg over measured runs)'}},
+                },
+            },
+        });
+    }
+
+    function renderTable(data) {
+        const table = document.getElementById('resultsTable');
+        const body = document.getElementById('resultsBody');
+        body.innerHTML = '';
+        data.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${r.scenario}</td><td>${r.engine}</td><td><strong>${r.durationMs}</strong></td><td class="hit-count">${r.totalHits}</td><td class="hit-count">${r.runs}</td>`;
+            body.appendChild(tr);
+        });
+        table.style.display = '';
+    }
+</script>
+
+</body>
+</html>
+
